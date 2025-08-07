@@ -1,39 +1,35 @@
 from fastapi import FastAPI, UploadFile, File
-import os
-import shutil
-import pytesseract
+import os, shutil
+from ocr_rules import match_strategies
 from PyPDF2 import PdfReader
+from PIL import Image
+import pytesseract
 
 app = FastAPI()
-
-UPLOAD_DIR = "uploads"
+UPLOAD_DIR = "evidence collector and validator/backend/uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 def extract_text(file_path):
+    text = ""
     if file_path.lower().endswith(".pdf"):
-        text = ""
         reader = PdfReader(file_path)
         for page in reader.pages:
-            text += page.extract_text() or ""
-        return text.strip()
-
+            text += page.extract_text()
     elif file_path.lower().endswith((".png", ".jpg", ".jpeg")):
-        try:
-            import cv2
-            img = cv2.imread(file_path)
-            text = pytesseract.image_to_string(img)
-            return text.strip()
-        except Exception as e:
-            return f"Error reading image: {e}"
-    else:
-        return "Unsupported file type."
+        text = pytesseract.image_to_string(Image.open(file_path))
+    return text
 
 @app.post("/analyze")
 async def analyze_file(file: UploadFile = File(...)):
-    file_location = os.path.join(UPLOAD_DIR, file.filename)
-    
-    with open(file_location, "wb") as f:
-        shutil.copyfileobj(file.file, f)
-    
-    extracted_text = extract_text(file_location)
-    return extracted_text
+    file_path = os.path.join(UPLOAD_DIR, file.filename)
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    text = extract_text(file_path)
+    strategy_matches = match_strategies(file_path)  # OCR logic
+
+    return {
+        "filename": file.filename,
+        "extracted_text": text.strip(),
+        "matched_strategies": strategy_matches
+    }

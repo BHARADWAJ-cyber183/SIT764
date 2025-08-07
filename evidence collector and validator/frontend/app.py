@@ -1,36 +1,26 @@
 import streamlit as st
 import requests
-import os
 
-# Set page configuration
-st.set_page_config(page_title="Evidence Validator", layout="centered")
-st.title("📄 Evidence Collector & Validator")
+st.title(" Evidence Collector & Misconfiguration Validator")
+st.markdown("Upload an evidence file (image/pdf) to scan for strategy misconfigurations.")
 
-# Confirmation message
-st.write("✅ Frontend is working. Please upload a file to begin validation.")
+uploaded_file = st.file_uploader("Upload Evidence File", type=["pdf", "png", "jpg", "jpeg"])
 
-# Ensure temp upload folder exists
-os.makedirs("temp_uploads", exist_ok=True)
+if uploaded_file is not None:
+    files = {"file": (uploaded_file.name, uploaded_file, uploaded_file.type)}
+    response = requests.post("http://127.0.0.1:8000/analyze", files=files)
 
-# Upload file section
-uploaded = st.file_uploader("Upload Evidence File (PDF/Image)", type=["pdf", "png", "jpg", "jpeg"])
+    if response.status_code == 200:
+        data = response.json()
+        st.success("File processed successfully!")
+        st.subheader("Extracted Text:")
+        st.code(data["extracted_text"])
 
-if uploaded:
-    files = {"file": uploaded.getvalue()}
-    file_name = uploaded.name
-
-    # Save uploaded file locally
-    with open(f"temp_uploads/{file_name}", "wb") as f:
-        f.write(uploaded.getvalue())
-
-    # Send file to backend FastAPI endpoint
-    with open(f"temp_uploads/{file_name}", "rb") as f:
-        res = requests.post("http://127.0.0.1:8000/analyze", files={"file": f})
-
-    # Display backend response
-    if res.status_code == 200:
-        st.success("✅ File processed successfully!")
-        st.write("🔍 Extracted Text:")
-        st.code(res.text)
+        st.subheader("Matched Strategies:")
+        if data["matched_strategies"]:
+            for match in data["matched_strategies"]:
+                st.write(f"• **{match[0]}** ➝ Keyword: `{match[1]}`")
+        else:
+            st.warning("No strategy matched.")
     else:
-        st.error("❌ Failed to process file. Please ensure the backend is running.")
+        st.error("Something went wrong.")
