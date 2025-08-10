@@ -1,11 +1,23 @@
-from fastapi import FastAPI, UploadFile, File
-import os, shutil
-from ocr_rules import match_strategies
+import os
+from fastapi import FastAPI, File, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from PyPDF2 import PdfReader
 from PIL import Image
 import pytesseract
+import shutil
 
 app = FastAPI()
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
 UPLOAD_DIR = "evidence collector and validator/backend/uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
@@ -19,17 +31,20 @@ def extract_text(file_path):
         text = pytesseract.image_to_string(Image.open(file_path))
     return text
 
-@app.post("/analyze")
-async def analyze_file(file: UploadFile = File(...)):
-    file_path = os.path.join(UPLOAD_DIR, file.filename)
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+# API endpoint to receive uploaded files
+@app.post("/upload/")
+async def upload_file(file: UploadFile = File(...)):
+    file_location = os.path.join(UPLOAD_DIR, file.filename)
 
-    text = extract_text(file_path)
-    strategy_matches = match_strategies(file_path)  # OCR logic
+    # Save uploaded file
+    with open(file_location, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+
+    # Extract text
+    extracted_text = extract_text(file_location)
 
     return {
         "filename": file.filename,
-        "extracted_text": text.strip(),
-        "matched_strategies": strategy_matches
+        "message": "File processed successfully!",
+        "extracted_text": extracted_text
     }
